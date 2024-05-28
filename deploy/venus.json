@@ -1,0 +1,22 @@
+{
+    "project_name": "venus",
+    "module_name": "webserver",
+    "build": {
+        "docker_image": {
+            "base_image": "harbor.shopeemobile.com/autotest/venus:v15.3"
+        }
+    },
+    "run": {
+        "command": "flask run --no-reload --host 0.0.0.0 -p 5001",
+        "expose_port": 5001,
+        "enable_prometheus": true
+    },
+    "finish": {
+        "notifications": [
+            {
+                "type": "COMMAND",
+                "cmd": "curl -i -X POST -H 'Content-Type: application/json' -d '{ \"tag\": \"text\", \"text\": {\"content\": \"$JOB_NAME finish deploy by $FROM_USER_NAME, can check $BUILD_URL\"}}' https://openapi.seatalk.io/webhook/group/s5Vn3QnQS7CcDz5epw-M4Q"
+            }
+        ]
+    }
+}

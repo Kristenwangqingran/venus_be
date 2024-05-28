@@ -1,0 +1,36 @@
+##############################################
+# 基于centos7构建python3.7运行环境
+# 构建命令: 在Dockerfile文件目录下执行 docker build -t dd:v1 .
+# 容器启动命令: docker run -it -d -v `pwd`:/home/admin --name=dd dd:v1
+# 进入容器:docker exec -it webserver /bin/bash
+# @Time    : 2021-03-01
+# @Author  : GongXun
+##############################################
+
+FROM python:3.11
+LABEL author="Kobe" 
+
+WORKDIR /home/admin
+
+RUN apt update && apt -y install libpq-dev
+
+COPY pip.conf /root/.pip/pip.conf
+COPY requirements.txt .
+RUN pip install pip --upgrade && pip install -i https://pypi.garenanow.com -r requirements.txt \
+    && rm -f requirements.txt
+
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo 'Asia/Shanghai' >/etc/timezone
+
+COPY .git-credentials \
+    .gitconfig \
+    /root/
+RUN git config --global credential.helper store --file=/root/.git-credentials
+
+RUN curl -ksSL http://10.105.38.237:9000/spexmgr-releases/install.sh -o install.sh
+RUN chmod +x install.sh && ./install.sh linux-v1.0.5
+
+COPY install.sh /root
+RUN  /root/install.sh
+
+CMD ["sh"]

@@ -1,0 +1,124 @@
+version: "3.7"
+services:
+  webserver:
+    build:
+      context: ./dockerfiles
+      dockerfile: Dockerfile
+    image: harbor.shopeemobile.com/autotest/venus:v15.3
+    restart: always
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    volumes:
+      - ./:/home/admin
+      - ./dockerfiles/pip.conf:/root/.pip/pip.conf
+      - type: volume
+        source: materials
+        target: /home/admin/instance
+        volume:
+          nocopy: true
+    environment:
+      CURRENT_WEBSERVER: venus
+      FLASK_APP: main:app
+      FLASK_ENV: development
+      FLASK_DEBUG: "true"
+      ENV_CONFIG: test
+      APS_CONFIG: "true"
+      PORT: 5001
+    command:
+      # [ "gunicorn", "main:app", "-c", "gunicorn.config.py" ]
+      [
+        "flask",
+        "run",
+        "--no-reload",
+        "--host",
+        "0.0.0.0",
+        "-p",
+        "8001"
+      ]
+
+  swagger_ui:
+    image: "swaggerapi/swagger-ui"
+    restart: always
+    ports:
+      - "8002:8080"
+    volumes:
+      - ./documents:/run
+    environment:
+      SWAGGER_JSON: "/run/openapi.yaml"
+
+  redis:
+    image: "redis"
+    restart: always
+    ports:
+      - "8004:6379"
+    command: redis-server --requirepass 1234567890 --port 6379
+
+  nginx:
+    image: "harbor.shopeemobile.com/szqa/nginx"
+    restart: always
+    ports:
+      - 8005:80
+    volumes:
+      - ./dockerfiles/nginx.conf:/etc/nginx/conf.d/default.conf
+      - type: volume
+        source: logs
+        target: /usr/share/nginx/logs
+        volume:
+          nocopy: true
+
+  rqdashboard:
+    image: harbor.shopeemobile.com/autotest/rq-dashboard:v3.0
+    restart: always
+    depends_on:
+      - rq
+    ports:
+      - 8006:9181
+    environment:
+      RQ_DASHBOARD_REDIS_URL: redis://:1234567890@redis:6379/3
+      RQ_DASHBOARD_USERNAME: kobe
+      RQ_DASHBOARD_PASSWORD: kobe
+
+  rq:
+    build:
+      context: ./dockerfiles
+      dockerfile: DockerfileDD
+    image: harbor.shopeemobile.com/autotest/dd:v11
+    restart: always
+    depends_on:
+      - redis
+      - webserver
+    volumes:
+      - ./:/home/admin
+      - ./dockerfiles/pip.conf:/root/.pip/pip.conf
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/tmp:/var/tmp
+      - type: volume
+        source: materials
+        target: /home/admin/instance
+        volume:
+          nocopy: true
+    environment:
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/python3/bin
+      ENV_CONFIG: test
+      APS_CONFIG: "false"
+    # extra_hosts:
+    #   - "qa.sz.shopee.io:10.143.138.214"
+    #   - "cap.qa.sz.shopee.io:10.143.138.214"
+    command: [ "python", "./dockerfiles/start.py", "-e", "test" ]
+
+volumes:
+  materials:
+    driver_opts:
+      type: "nfs"
+      o: "addr=10.12.78.89,resvport,rw,intr,soft,timeo=30,retry=3,vers=4,port=2049"
+      device: ":/"
+
+  logs:
+    driver_opts:
+      type: "nfs"
+      o: "addr=10.12.78.89,resvport,rw,intr,soft,timeo=30,retry=3,vers=4,port=2049"
+      device: ":/logs"
+
+# sudo mount -v -t nfs -o rw,intr,soft,timeo=30,retry=3,vers=4,port=2049 10.12.78.79:/ ./instance
